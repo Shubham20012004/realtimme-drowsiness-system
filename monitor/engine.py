@@ -18,12 +18,16 @@ def ear(points):
 
 class Engine:
     def __init__(self, calibration_s=5, window=30, max_gap=0.3):
+        if calibration_s<=0 or window<=0 or max_gap<=0:
+            raise ValueError("Calibration duration, window and maximum gap must be positive")
         self.calibration_s, self.window, self.max_gap = calibration_s, window, max_gap
         self.last = self.start = self.segment = self.closed_since = None
         self.samples = deque(maxlen=4096)
         self.intervals = deque(maxlen=16384)
         self.blinks = deque(maxlen=1024)
         self.baseline = self.previous = None
+        self.alert_state = None
+        self.recovery_since = None
         self.yawn_start = self.nod_start = self.last_pitch = None
         self.yawns = deque(maxlen=1024)
         self.nods = deque(maxlen=1024)
@@ -39,9 +43,15 @@ class Engine:
         out = dict(t=t, schema=SCHEMA, status=reason, state=None)
         if obs is None or dt > self.max_gap:
             self.previous = self.closed_since = self.segment = None
+            self.alert_state = self.recovery_since = None
             self.samples.clear()
             self.yawn_start = self.nod_start = self.last_pitch = None
             self.current_yawn_counted = self.current_nod_counted = False
+        if self.baseline is None and t-self.start>max(20,4*self.calibration_s):
+            self.start=t
+            self.segment=None
+            self.samples.clear()
+            return dict(out,status="CALIBRATION_TIMEOUT",reason="Insufficient contiguous valid observations")
         if obs is None:
             return out
         out.update(obs)
@@ -63,6 +73,8 @@ class Engine:
                 return out
             self.baseline = dict(zip(("left","right","mar","pitch","yaw","roll"), centers))
             self.samples.clear()
+            out["calibration_mad"]=dict(zip(("left","right","mar","pitch","yaw","roll"),deviations))
+            out["calibration_s"]=elapsed
         normalized = (obs["left"]/self.baseline["left"] + obs["right"]/self.baseline["right"])/2
         closed = normalized < 0.72
         if self.previous is not None and dt <= self.max_gap:
@@ -106,7 +118,17 @@ class Engine:
         self.previous = closed
         durations = [d for _,d in self.blinks if 0.06 <= d < 0.8]
         coverage = min(1,valid/self.window)
-        out.update(status="RUNNING", state="CRITICAL" if closure >= 1.5 else "DROWSY" if closure >= 0.5 else "ALERT",
+        candidate = "CRITICAL" if closure >= 1.5 else "DROWSY" if closure >= 0.5 else "ALERT"
+        severity = {"ALERT":0,"DROWSY":1,"CRITICAL":2}
+        if self.alert_state is None or severity[candidate]>=severity[self.alert_state]:
+            self.alert_state=candidate
+            self.recovery_since=None
+        elif self.recovery_since is None:
+            self.recovery_since=t
+        elif t-self.recovery_since>=.25:
+            self.alert_state=candidate
+            self.recovery_since=None
+        out.update(status="RUNNING", state=self.alert_state,
                    baseline=self.baseline, normalized=normalized, closure_s=closure, coverage=coverage,
                    perclos=shut/valid if coverage>=0.7 else None,
                    blink_per_min=60*len(durations)/valid if coverage>=0.7 else None,

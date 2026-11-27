@@ -24,14 +24,16 @@ except ImportError:
 if sys.platform.startswith('win'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler("system_events.log", encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+def configure_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        handlers=[
+            logging.FileHandler("system_events.log", encoding='utf-8'),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
 
 def find_arduino_port(default_port="COM5"):
     ports_to_try = [default_port]
@@ -466,6 +468,7 @@ class UltimateDrowsinessDetector:
 
 
 if __name__ == "__main__":
+    configure_logging()
     detector = UltimateDrowsinessDetector()
     video_stream = WebcamVideoStream(src=0, width=1280, height=720).start()
     time.sleep(2.0)

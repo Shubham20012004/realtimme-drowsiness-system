@@ -93,3 +93,37 @@ def export(sid:str):
     with database() as db:
         writer.writerows(db.execute("SELECT session,t,payload FROM frames WHERE session=? ORDER BY t",(sid,)))
     return Response(out.getvalue(),media_type="text/csv")
+
+@app.get("/evaluations")
+def evaluations():
+    import os
+    root=Path(os.environ.get("DROWSINESS_RESULTS","runs"))
+    results=[]
+    for report in sorted(root.glob("*/evaluation.json")):
+        try:
+            record=json.loads(report.read_text(encoding="utf8"))
+            results.append({"run":report.parent.name,"model":record["model"],
+                "macro_f1":record["classification"]["macro avg"]["f1-score"],
+                "coverage":record["eligible_fraction"],"participants":len(record["participants"]["test"]),
+                "confusion":record["confusion"],"labels":record["labels"]})
+        except (ValueError,KeyError,OSError) as error:
+            results.append({"run":report.parent.name,"error":str(error)})
+    return results
+
+
+@app.get("/sessions/{sid}/stream")
+async def stream(sid:str):
+    import asyncio
+    from fastapi.responses import StreamingResponse
+    async def messages():
+        previous=None
+        while True:
+            row=await asyncio.to_thread(latest,sid)
+            signature=(row.get("t"),row.get("status"))
+            if signature!=previous:
+                yield "data: "+json.dumps(row)+"\n\n"
+                previous=signature
+            else:
+                yield ": heartbeat\n\n"
+            await asyncio.sleep(1)
+    return StreamingResponse(messages(),media_type="text/event-stream")

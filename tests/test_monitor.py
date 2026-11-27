@@ -35,6 +35,14 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(e.update(3.2,obs(.08))["closure_s"],0)
         self.assertIsNone(e.update(7,obs())["perclos"])
 
+    def test_recovery_requires_persistence(self):
+        e=self.calibrated()
+        for i in range(21,57):
+            row=e.update(i/20,obs(.08))
+        self.assertEqual(row["state"],"CRITICAL")
+        self.assertEqual(e.update(2.9,obs())["state"],"CRITICAL")
+        self.assertEqual(e.update(3.16,obs())["state"],"ALERT")
+
     def test_duplicate_and_invalid_time(self):
         e = self.calibrated()
         for t in (1,.9,float("nan")):

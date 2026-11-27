@@ -30,13 +30,17 @@ def database(path=None):
 
 def migrate(path=None):
     with database(path) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("BEGIN IMMEDIATE")
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         if version > 1:
             raise ValueError("Newer database version")
         if version == 0 and conn.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]:
             raise ValueError("Existing unversioned database. Select a new research database.")
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.executescript("BEGIN;"+DDL+"PRAGMA user_version=1;COMMIT;")
+        for statement in DDL.split(";"):
+            if statement.strip():
+                conn.execute(statement)
+        conn.execute("PRAGMA user_version=1")
 
 
 class Writer:

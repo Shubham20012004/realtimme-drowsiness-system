@@ -94,10 +94,25 @@ def train(csv, destination):
         raise ValueError("No eligible held-out observations")
     test_valid = test.loc[eligible]
     pred = pipe.predict(test_valid[cols])
+    people=test_valid.participant.to_numpy()
+    targets=test_valid.label.to_numpy()
+    groups=sorted(set(people))
+    subject_confusions=np.array([confusion_matrix(targets[people==g],pred[people==g],labels=labels) for g in groups])
+    intervals=None
+    if len(groups)>=2:
+        rng=np.random.default_rng(23)
+        replicates=[]
+        for _ in range(1000):
+            sample=subject_confusions[rng.integers(len(groups),size=len(groups))].sum(axis=0)
+            denom=sample.sum(axis=1)+sample.sum(axis=0)
+            replicates.append(np.divide(2*sample.diagonal(),denom,out=np.zeros(len(labels)),where=denom>0).mean())
+        intervals=np.quantile(replicates,[.025,.975]).tolist()
+    per_subject={g:{"n":int(sum(people==g)),"confusion":m.tolist()} for g,m in zip(groups,subject_confusions)}
     bundle = dict(schema=SCHEMA,features=cols,model=name,estimator=pipe,sklearn=sklearn.__version__)
     report = dict(model=name,features=cols,schema=SCHEMA,labels=labels,seed=23,
                   dataset_sha256=hashlib.sha256(Path(csv).read_bytes()).hexdigest(),development_cv=scores,
                   participants={s:sorted(g.participant.unique()) for s,g in df.groupby("split")},
+                  participant_confusions=per_subject,participant_bootstrap_macro_f1_ci95=intervals,
                   eligible_fraction=float(eligible.mean()),n_eligible=int(eligible.sum()),
                   balanced_accuracy=balanced_accuracy_score(test_valid.label,pred),
                   classification=classification_report(test_valid.label,pred,labels=labels,output_dict=True,zero_division=0),

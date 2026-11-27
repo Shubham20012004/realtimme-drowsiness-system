@@ -22,6 +22,8 @@ def main():
     p.add_argument("--baud",type=int,default=9600)
     p.add_argument("--width",type=int,default=1280)
     p.add_argument("--height",type=int,default=720)
+    p.add_argument("--calibration-seconds",type=float,default=5)
+    p.add_argument("--window-seconds",type=float,default=30)
     p.add_argument("--fps",type=float,default=30)
     p.add_argument("--headless",action="store_true")
     p.add_argument("--participant",default="anonymous")
@@ -55,13 +57,13 @@ def main():
         conn.execute("INSERT INTO sessions(id,participant,conditions) VALUES(?,?,?)",(session,args.participant,args.conditions))
     output = Writer(args.db,session)
     alerts = Alerts(args.port,args.baud)
-    detector = Engine()
-    start = time.monotonic()
+    detector = Engine(args.calibration_seconds,args.window_seconds)
+    start = time.perf_counter()
     count = 0
     try:
         while True:
             ok,frame = cap.read()
-            now = time.monotonic()
+            now = time.perf_counter()
             if not ok and args.video:
                 break
             t = cap.get(cv2.CAP_PROP_POS_MSEC)/1000 if args.video else now-start
@@ -76,9 +78,15 @@ def main():
                 from .training import infer
                 row["prediction"] = infer(model,row)
             count += int(ok)
-            row.update(processing_ms=1000*(time.monotonic()-now),actual_fps=count/(time.monotonic()-start),
+            elapsed=time.perf_counter()-start
+            row.update(processing_ms=1000*(time.perf_counter()-now),actual_fps=count/elapsed if elapsed>0 else None,
                        serial_status=alerts.status,dropped_records=output.dropped,recorded_at=time.time())
-            alerts.level = {"ALERT":0,"DROWSY":1,"CRITICAL":2}.get(row["state"],2)
+            if row["state"] is not None:
+                alerts.level = {"ALERT":0,"DROWSY":1,"CRITICAL":2}[row["state"]]
+            elif row["status"] in ("TRACKING_LOST","TRACKING_DEGRADED","CAMERA_ERROR"):
+                alerts.level = 2
+            else:
+                alerts.level = None
             output.put(row)
             if not ok:
                 cap.release()
@@ -92,7 +100,7 @@ def main():
                 if key in (27,ord("q")):
                     break
                 if key==ord("r"):
-                    detector = Engine()
+                    detector = Engine(args.calibration_seconds,args.window_seconds)
     finally:
         cap.release()
         vision.close()
