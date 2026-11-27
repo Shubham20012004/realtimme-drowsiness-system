@@ -112,7 +112,10 @@ class AsyncTelemetryLogger:
             except Exception as e: logging.error(f"Telemetry Error: {e}")
                 
         if db_batch:
-            cursor.executemany('INSERT INTO telemetry (...) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', db_batch)
+            cursor.executemany('''INSERT INTO telemetry
+                (session_id, timestamp, frame_number, ear, mar, perclos, pitch, yaw, roll,
+                 blink_rate, microsleep_events, fatigue_score, confidence, system_state)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', db_batch)
             conn.commit()
         conn.close()
         json_file.close()
@@ -128,7 +131,7 @@ class AsyncTelemetryLogger:
 
     def cleanup(self):
         self.queue.put(None)
-        self.worker.join(timeout=2.0)
+        self.worker.join()
 
 
 class WebcamVideoStream:
