@@ -1,0 +1,34 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{amsmath}
+\title{Quality-Aware Adaptive Real-Time Driver Drowsiness Detection Using Personalized Facial Calibration and Temporal Feature Fusion}
+\begin{document}
+\maketitle
+\begin{abstract}
+This methods draft describes a stationary prototype for measuring visible eye closure, mouth opening and head motion. An audit of eight historical session files identified predictions but no independent annotations. We propose a subject-independent evaluation of personalization and tracking-quality gating, with false alert onsets per observed hour at matched event sensitivity as the primary endpoint.
+\end{abstract}
+\begin{IEEEkeywords}eye aspect ratio, driver monitoring, temporal features, missing observations\end{IEEEkeywords}
+\section{Introduction}
+A closure timer that continues across an occlusion can create a false event at reacquisition. Discarding unobservable intervals can also improve apparent performance on accepted frames while reducing operational coverage. We ask whether a quality-aware method can reduce event errors without losing unacceptable amounts of observable time.
+\section{Related work}
+Soukupov\'a and \v{C}ech used short temporal sequences of eye aspect ratios for blink detection \cite{ear}. Ghoddoosian et al.\ evaluated hierarchical temporal blink features on self-reported vigilance videos \cite{uta}. Abtahi et al.\ supplied in-car video for yawning detection, including talking and other mouth movements \cite{yawdd}. These outcomes differ in annotation unit and semantics. The proposed experiment quantifies abstention, alert burden and sensitivity separately for each task.
+\section{Measurement}
+OpenCV supplies each exposure to MediaPipe Face Mesh. Webcam samples use a monotonic clock and recorded video uses presentation time. SQLite stores derived telemetry separately from independent annotations. An optional serial worker emits the original ASCII commands.
+For six ordered eye points in image pixels,
+\[
+ E=\frac{\|p_2-p_6\|+\|p_3-p_5\|}{2\|p_1-p_4\|}.
+\]
+Each eye is normalized against its median calibration baseline. MAR divides the inner lip opening by mouth width. Pose uses six image-model correspondences with nominal focal length equal to image width. Brightness, blur and reprojection residual gate observations. Camera calibration and physical pose accuracy remain to be tested.
+\section{Temporal protocol}
+Let $V$ be the duration supported by consecutive valid observations in the trailing 30 seconds. Exclude intervals above 0.3 seconds and intervals spanning lost tracking. Both endpoints must be below a normalized EAR of 0.72 to contribute to closed time $C$. Report $C/V$ when $V/30\ge0.7$. This operational proxy for PERCLOS requires validation against eyelid occlusion. Provisional closure thresholds of 0.5 and 1.5 seconds require development-set selection.
+\section{Experiments}
+Freeze participant splits, annotation granularity and missing-data handling. Compare fixed EAR, original adaptive rules and supervised models. Compare eye features, mouth features, closure fraction and full features on identical folds. Estimate paired participant-level uncertainty for false alarms, latency, recall and coverage. Compare deterministic and Isolation Forest gates at matched coverage. Keep tracking loss and calibration failures in operational reports. Independently measure hardware actuation latency.
+\section{Results and limitations}
+Eight archived JSONL files contain 11,983 telemetry records. One session is empty. Independent labels, participant identities and unique camera exposure identifiers are unavailable. No sensitivity, Macro F1 or false-alarm rate can be inferred. Unit tests exercise software behaviour. Labelled benchmark evaluation, blinded participant assessment and long-duration hardware trials remain open. Facial behaviour alone cannot establish physiological fatigue.
+\section{Ethics, availability and conclusion}
+Conduct approved stationary studies with informed consent. Keep restricted video and consent forms outside the code repository. Code and protocol accompany the research branch of Shubham20012004/realtimme-drowsiness-system. The prototype makes missing measurements observable; the proposed improvement remains an experimental question.
+\begin{thebibliography}{3}
+\bibitem{ear} T. Soukupov\'a and J. \v{C}ech, Real-Time Eye Blink Detection Using Facial Landmarks, Computer Vision Winter Workshop, 2016.
+\bibitem{uta} R. Ghoddoosian, M. Galib and V. Athitsos, A Realistic Dataset and Baseline Temporal Model for Early Drowsiness Detection, IEEE/CVF CVPR Workshops, 2019.
+\bibitem{yawdd} S. Abtahi, M. Omidyeganeh, S. Shirmohammadi and B. Hariri, YawDD: A Yawning Detection Dataset, ACM MMSys, 2014, doi:10.1145/2557642.2563678.
+\end{thebibliography}
+\end{document}

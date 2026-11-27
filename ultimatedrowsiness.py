@@ -24,14 +24,16 @@ except ImportError:
 if sys.platform.startswith('win'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler("system_events.log", encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+def configure_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        handlers=[
+            logging.FileHandler("system_events.log", encoding='utf-8'),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
 
 def find_arduino_port(default_port="COM5"):
     ports_to_try = [default_port]
@@ -112,7 +114,10 @@ class AsyncTelemetryLogger:
             except Exception as e: logging.error(f"Telemetry Error: {e}")
                 
         if db_batch:
-            cursor.executemany('INSERT INTO telemetry (...) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', db_batch)
+            cursor.executemany('''INSERT INTO telemetry
+                (session_id, timestamp, frame_number, ear, mar, perclos, pitch, yaw, roll,
+                 blink_rate, microsleep_events, fatigue_score, confidence, system_state)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', db_batch)
             conn.commit()
         conn.close()
         json_file.close()
@@ -128,7 +133,7 @@ class AsyncTelemetryLogger:
 
     def cleanup(self):
         self.queue.put(None)
-        self.worker.join(timeout=2.0)
+        self.worker.join()
 
 
 class WebcamVideoStream:
@@ -463,6 +468,7 @@ class UltimateDrowsinessDetector:
 
 
 if __name__ == "__main__":
+    configure_logging()
     detector = UltimateDrowsinessDetector()
     video_stream = WebcamVideoStream(src=0, width=1280, height=720).start()
     time.sleep(2.0)
